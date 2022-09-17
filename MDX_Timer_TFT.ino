@@ -1,4 +1,8 @@
-
+/*
+ * Matthias Mueller
+ * copyright (c) 2016
+ * Please leave this note within the code.
+ */
 #include <Arduino.h>
 
 #include "Debug.h"
@@ -6,41 +10,38 @@
 #include "Motor.h"
 #include "UI.h"
 #include "Settings.h"
-#include "StateMachine.h"
 
 
 Motor motor;
 Settings settings;
 UI ui;
-StateMachine stateMachine;
-
-int currentState = INITIAL_STATE;
 
 
-// *** Begin WireUp functions ***
+int currentState = MANUAL_BUTTON;
+unsigned int currentTimerValue = 0;
+unsigned long targetTime = 0;
 
-int timer0Handle(int evt);
-void timer0Update(int newValue);
+// logic
+bool prog = false;
+bool start = false;
+bool pause = false;
 
-int timer1Handle(int evt);
-void timer1Update(int newValue);
 
-int timer2Handle(int evt);
-void timer2Update(int newValue);
+// *** Begin Callback functions ***
 
-int playPauseHandle(int evt);
-void playPauseUpdate(int newValue);
+void onManualClick();
+void onTimer1Click();
+void onTimer2Click();
 
-int recHandle(int evt);
-void recUpdate(int newValue);
+void onUpClick();
+void onDownClick();
 
-int upHandle(int evt);
-void upUpdate(int newValue);
+void onPlayClick();
+void onPauseClick();
 
-int downHandle(int evt);
-void downUpdate(int newValue);
+void onRecClick();
 
-// *** End WireUp functions ***
+// *** End Callback functions ***
 
 
 void setup() {
@@ -48,172 +49,248 @@ void setup() {
   Serial.begin(115200);
 #endif
   
-  ui.init(settings.getTimers());
+  ui.init();
   
   ui.showSplashScreen(settings.getName(), settings.getVersion());
 
+  ui.addButton(MANUAL_BUTTON, onManualClick);
+  ui.addButton(TIMER1_BUTTON, onTimer1Click);
+  ui.addButton(TIMER2_BUTTON, onTimer2Click);
+
+  ui.addButton(UP_BUTTON, onUpClick);
+  ui.addButton(DOWN_BUTTON, onDownClick);
+
+  ui.addButton(PLAY_BUTTON, onPlayClick);
+  ui.addButton(PAUSE_BUTTON, onPauseClick);
+  ui.addButton(REC_BUTTON, onRecClick);
+  ui.addButton(REC_BUTTON_ACTIVE, onRecActiveClick);
+
   currentState = settings.getStartState();
-  stateMachine.init(currentState);
-  stateMachine.addState(TIMER0_STATE, timer0Handle, timer0Update);
-  stateMachine.addState(TIMER1_STATE, timer1Handle, timer1Update);
-  stateMachine.addState(TIMER2_STATE, timer2Handle, timer2Update);
-  stateMachine.addState(PLAY_PAUSE_STATE, playPauseHandle, playPauseUpdate);
-  stateMachine.addState(REC_STATE, recHandle, recUpdate);
-  stateMachine.addState(UP_STATE, upHandle, upUpdate);
-  stateMachine.addState(DOWN_STATE, downHandle, downUpdate);
+  if (currentState == TIMER1_BUTTON || currentState == TIMER2_BUTTON) {
+    currentTimerValue = settings.getTimers()[currentState - 1];
+  }
+
+  delay(2000);
+  
+  ui.refresh();
+    
+  ui.activateButton(PLAY_BUTTON);
+  ui.activateButton(REC_BUTTON);
+
+  ui.activateButton(currentState);
+
+  ui.updateContent(currentTimerValue);
 }
+
 
 void loop() {
+
+  if (start && (millis() > targetTime && currentState != MANUAL_BUTTON)) {
+    motor.stop();
+    start = false;
+    pause = false;
+    
+    currentTimerValue = settings.getTimers()[currentState - 1];
+    ui.activateButton(PLAY_BUTTON);
+    ui.updateContent(currentTimerValue);
+  }
+  if (start) {
+    if (currentState == MANUAL_BUTTON) {
+      currentTimerValue = millis() - targetTime;
+    }
+    else {
+      currentTimerValue = targetTime - millis();
+    }
+    currentTimerValue /= 100;
+    ui.updateContent(currentTimerValue);
+  }  
+
+  ui.checkButtonPressed();
+}
+
+
+// *********************** CLICK LOGIC ****************************************
+
+void onPlayClick() {
+  if (start) {
+    return;
+  }
   
-  //motor.start(settings.getTimers()[0] * 1000);
+  DEBUG_PRINTLN("Play pressed");
 
-  int newValue = ui.update();
+  DEBUG_PRINT("start with time=");
+  DEBUG_PRINTLN(currentTimerValue);
+
+  ui.activateButton(PAUSE_BUTTON);
+  delay(200);
+
+  start = true;
+  pause = false;
+  prog = false;
+  ui.activateButton(REC_BUTTON);
   
-  if (newValue != currentState) {
-    currentState = stateMachine.update(newValue);
+  motor.start();
+  
+  targetTime = millis();
+  if (currentState == MANUAL_BUTTON) {
+    if (pause) {
+      // continue
+      targetTime -= currentTimerValue * 100;
+    }
+  }
+  else {
+    targetTime += currentTimerValue * 100;
   }
 }
 
-// ***************************************************************
-
-
-int timer0Handle(int evt) {
-  switch(evt) {
-    case 0:
-    return 1;
-    break;
-    case 1:
-    return 2;
-    break;
-    default:
-    return 0;
-    break;
+void onPauseClick() {
+  if (!start) {
+    return;
   }
+  
+  DEBUG_PRINTLN("Pause pressed");
+
+  DEBUG_PRINT("pause with time=");
+  DEBUG_PRINTLN(currentTimerValue);
+
+  motor.stop();
+      
+  start = false;
+  pause = true;
+  prog = false;
+  ui.activateButton(REC_BUTTON);
+
+  ui.activateButton(PLAY_BUTTON);
+
+  delay(300);
 }
 
-void timer0Update(int newValue) {
-  ui.refresh(newValue);
-
-  settings.setStartState(newValue);
-}
-
-int timer1Handle(int evt) {
-  switch(evt) {
-    case 0:
-    return 1;
-    break;
-    case 1:
-    return 2;
-    break;
-    default:
-    return 0;
-    break;
+void onManualClick() {
+  if (start) {
+    return;
   }
-}
 
-void timer1Update(int newValue) {
-  ui.refresh(newValue);
-
-  settings.setStartState(newValue);
-}
-
-int timer2Handle(int evt) {
-  switch(evt) {
-    case 0:
-    return 1;
-    break;
-    case 1:
-    return 2;
-    break;
-    default:
-    return 0;
-    break;
+  if (currentState == MANUAL_BUTTON) {
+    return;
   }
+  
+  DEBUG_PRINTLN("Manual pressed");
+  
+  currentState = MANUAL_BUTTON;
+  ui.activateButton(currentState);
+  settings.setStartState(currentState);
+
+  currentTimerValue = 0;
+  ui.updateContent(currentTimerValue);
+
+  prog = false;
+  ui.activateButton(REC_BUTTON);
 }
 
-void timer2Update(int newValue) {
-  ui.refresh(newValue);
-
-  settings.setStartState(newValue);
-}
-
-int playPauseHandle(int evt) {
-  switch(evt) {
-    case 0:
-    return 1;
-    break;
-    case 1:
-    return 2;
-    break;
-    default:
-    return 0;
-    break;
+void onTimer1Click() {
+  if (start) {
+    return;
   }
-}
+  
+  DEBUG_PRINTLN("Timer1 pressed");
 
-void playPauseUpdate(int newValue) {
-  ui.refresh(newValue);
-
-  settings.setStartState(newValue);
-}
-
-int recHandle(int evt) {
-  switch(evt) {
-    case 0:
-    return 1;
-    break;
-    case 1:
-    return 2;
-    break;
-    default:
-    return 0;
-    break;
+  if (prog) {
+    settings.getTimers()[0] = currentTimerValue;
+    settings.save();
+    prog = false;
+    ui.activateButton(REC_BUTTON);
   }
-}
-
-void recUpdate(int newValue) {
-  ui.refresh(newValue);
-
-  settings.setStartState(newValue);
-}
-
-int upHandle(int evt) {
-  switch(evt) {
-    case 0:
-    return 1;
-    break;
-    case 1:
-    return 2;
-    break;
-    default:
-    return 0;
-    break;
+  
+  if (currentState == TIMER1_BUTTON) {
+    return;
   }
+
+  currentTimerValue = settings.getTimers()[0];
+  ui.updateContent(currentTimerValue);
+
+  currentState = TIMER1_BUTTON;
+  ui.activateButton(currentState);
+  settings.setStartState(currentState);
 }
 
-void upUpdate(int newValue) {
-  ui.refresh(newValue);
-
-  settings.setStartState(newValue);
-}
-
-int downHandle(int evt) {
-  switch(evt) {
-    case 0:
-    return 1;
-    break;
-    case 1:
-    return 2;
-    break;
-    default:
-    return 0;
-    break;
+void onTimer2Click() {
+  if (start) {
+    return;
   }
+  
+  DEBUG_PRINTLN("Timer2 pressed");
+  
+  if (prog) {
+    settings.getTimers()[1] = currentTimerValue;
+    settings.save();
+    prog = false;
+    ui.activateButton(REC_BUTTON);
+  }
+  
+  if (currentState == TIMER2_BUTTON) {
+    return;
+  }
+  
+  currentTimerValue = settings.getTimers()[1];
+  ui.updateContent(currentTimerValue);
+  
+  currentState = TIMER2_BUTTON;
+  ui.activateButton(currentState);
+  settings.setStartState(currentState);
 }
 
-void downUpdate(int newValue) {
-  ui.refresh(newValue);
 
-  settings.setStartState(newValue);
+void onUpClick() {
+  if (start || currentState == MANUAL_BUTTON) {
+    return;
+  }
+  
+  DEBUG_PRINTLN("Up pressed");
+
+  currentTimerValue++;
+  ui.updateContent(currentTimerValue);
+
+  prog = false;
+  ui.activateButton(REC_BUTTON);
 }
 
+void onDownClick() {
+  if (start || currentState == MANUAL_BUTTON) {
+    return;
+  }
+  
+  DEBUG_PRINTLN("Down pressed");
+
+  currentTimerValue--;
+  ui.updateContent(currentTimerValue);
+
+  prog = false;
+  ui.activateButton(REC_BUTTON);
+}
+
+
+void onRecClick() {
+  if (start) {
+    return;
+  }
+  
+  DEBUG_PRINTLN("Rec pressed");
+
+  prog = true;
+  ui.activateButton(REC_BUTTON_ACTIVE);
+
+  delay(200);
+}
+
+void onRecActiveClick() {
+  if (start) {
+    return;
+  }
+  
+  DEBUG_PRINTLN("Rec Active pressed");
+
+  prog = false;
+  ui.activateButton(REC_BUTTON);
+
+  delay(200);
+}
