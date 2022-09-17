@@ -4,7 +4,7 @@
 #include <EEPROM.h>
 
 
-#define CURRENT_VERSION   "0.1"
+#define CURRENT_VERSION   1
 #define MACHINE_NAME      "MDX"
 
 
@@ -12,6 +12,7 @@
 
 Settings::Settings() {
   // read from EEPROM
+  
   EEPROM.get(0, _currentSettings);
 
   if (_currentSettings.version != CURRENT_VERSION) {
@@ -41,6 +42,7 @@ int Settings::getStartState() {
 
 void Settings::setStartState(int startState) {
   _currentSettings.startState = startState;
+  save();
 }
 
 String Settings::getName() {
@@ -48,11 +50,10 @@ String Settings::getName() {
 }
 
 String Settings::getVersion() {
-  return CURRENT_VERSION;
+  return String(_currentSettings.version);
 }
 
 int* Settings::getTimers() {
   return _currentSettings.values;
 }
-
 
