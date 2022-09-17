@@ -5,8 +5,7 @@
 #include "Debug.h"
 
 
-#define MOTOR_PIN     2
-
+#define MOTOR_PIN     19
 
 class Motor {
 public:
