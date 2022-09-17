@@ -10,7 +10,7 @@
 
 
 struct EEPROMSettings {
-  String version;
+  int version;
   int startState;
   int values[MAX_NUM_TIMERS];
 };
