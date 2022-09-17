@@ -2,36 +2,46 @@
 #define UI_h
 
 #include <Arduino.h>
-#include "Debug.h"
-#include "StateMachine.h"
+#include <Adafruit_GFX.h>     // Core graphics library: https://github.com/adafruit/Adafruit-GFX-Library
+#include <TouchScreen.h>      // https://github.com/adafruit/Touch-Screen-Library
+
+#include "Button.h"
 
 
-#define RUN_INFINITE  0
+#define NUM_BUTTONS        9
 
-//typedef void (*callback)();
-
-typedef struct {
-  unsigned int      pos_x, pos_y, width, height;
-  String label;
-  void (*callback)();
-} ButtonType;
+#define MANUAL_BUTTON      0
+#define TIMER1_BUTTON      1
+#define TIMER2_BUTTON      2
+#define PLAY_BUTTON        3
+#define REC_BUTTON         4
+#define UP_BUTTON          5
+#define DOWN_BUTTON        6
+#define REC_BUTTON_ACTIVE  7
+#define PAUSE_BUTTON       8
 
 
 class UI {
 public:
   UI();
 
-  void init(int *timers);
-  
+  void init();
+  void refresh();
+    
   void showSplashScreen(String name, String version);
-  int update();
-  void refresh(int newValue);
+  void updateContent(unsigned int newContent);
   
-private:
-  void addButton(ButtonType newBtn);
+  void checkButtonPressed();
+  void addButton(int btnId, void (*callback)());
+  void activateButton(int btnId);
   
-  ButtonType _buttons[NUM_STATES];
+private:  
+  int _activeButtonId;
+  unsigned int _content;
+  Button _buttons[NUM_BUTTONS];
 
+  Adafruit_GFX *_gfx;
+  TouchScreen *_touchScreen;
 };
 
 #endif
