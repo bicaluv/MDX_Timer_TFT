@@ -1,7 +1,7 @@
 #ifndef Debug_h
 #define Debug_h
 
-#define DEBUG // comment this line if debug output is to be disabled
+//#define DEBUG // comment this line if debug output is to be disabled
 
 
 #ifdef DEBUG
